@@ -40,7 +40,8 @@ fn main() -> std::io::Result<()> {
                                                 .iter()
                                                 .map(|attr| format!(
                                                     "{}=\"{}\"",
-                                                    attr.name.local_name, attr.value
+                                                    attr.name.local_name,
+                                                    attr.value.replace("&", "&amp;")
                                                 ))
                                                 .collect::<Vec<String>>()
                                                 .join(" ")
@@ -62,7 +63,6 @@ fn main() -> std::io::Result<()> {
                             _ => {}
                         }
                     }
-
                     map_arr.push(map);
                 }
             }
@@ -78,7 +78,24 @@ fn main() -> std::io::Result<()> {
                 .or_insert(value);
         }
     }
+
     println!("{:?}", final_map);
+    use std::io::Write;
+
+    let master_file_path = "master.txt";
+    let mut master_file = File::create(master_file_path)?;
+    master_file.set_len(0)?;
+
+    write!(
+        master_file,
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n<deck>\n"
+    )?;
+    for (key, value) in final_map.iter() {
+        for _ in 0..*value {
+            write!(master_file, "{}\n", key)?;
+        }
+    }
+    write!(master_file, "</deck>\n")?;
 
     Ok(())
 }
