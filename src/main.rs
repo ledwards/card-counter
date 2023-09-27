@@ -23,7 +23,7 @@ fn main() -> std::io::Result<()> {
                     let parser = EventReader::from_str(&contents);
                     let mut map = HashMap::new();
                     let mut depth = 0;
-                    let mut name = String::new();
+                    let mut line = String::new();
 
                     for e in parser {
                         match e {
@@ -33,18 +33,26 @@ fn main() -> std::io::Result<()> {
                                 depth += 1;
                                 if depth == 2 {
                                     if name.local_name == "card" {
-                                        for attr in attributes {
-                                            if attr.name.local_name == "title" {
-                                                *map.entry(attr.value.clone()).or_insert(0) += 1;
-                                            }
-                                        }
+                                        line = format!(
+                                            "<{} {}/>",
+                                            name.local_name.clone(),
+                                            attributes
+                                                .iter()
+                                                .map(|attr| format!(
+                                                    "{}=\"{}\"",
+                                                    attr.name.local_name, attr.value
+                                                ))
+                                                .collect::<Vec<String>>()
+                                                .join(" ")
+                                        );
+                                        *map.entry(line.clone()).or_insert(0) += 1;
                                     }
                                 }
                             }
                             Ok(XmlEvent::EndElement { .. }) => {
                                 depth -= 1;
                                 if depth == 1 {
-                                    name.clear();
+                                    line.clear();
                                 }
                             }
                             Err(e) => {
