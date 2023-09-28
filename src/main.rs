@@ -1,101 +1,109 @@
 use std::collections::HashMap;
 use std::env;
-use std::fs;
+use std::fs::read_dir;
 use std::fs::File;
-use std::io::Read;
-use xml::reader::{EventReader, XmlEvent};
+use std::io::prelude::*;
 
-fn main() -> std::io::Result<()> {
+fn main() {
     let args: Vec<String> = env::args().collect();
-    let directory = &args[1];
 
-    let mut map_arr = Vec::new();
+    if args.len() != 2 {
+        println!("card-counter requires exactly 1 argument - the directory that contains a number of gemp deck files");
+        return;
+    }
 
-    if let Ok(entries) = fs::read_dir(directory) {
-        for entry in entries {
-            if let Ok(entry) = entry {
-                let path = entry.path();
-                if path.extension() == Some(std::ffi::OsStr::new("txt")) {
-                    let mut file = File::open(&path)?;
-                    let mut contents = String::new();
-                    file.read_to_string(&mut contents)?;
+    if args[1] == "help" || args[1] == "-h" || args[1] == "--help" {
+        println!("card-counter takes a directory of gemp deck files (.txt) and counts the max number of any one card across all decks. It then outputs a new deck file with the max number of each card.");
+        return;
+    }
 
-                    let parser = EventReader::from_str(&contents);
-                    let mut map = HashMap::new();
-                    let mut depth = 0;
-                    let mut line = String::new();
-
-                    for e in parser {
-                        match e {
-                            Ok(XmlEvent::StartElement {
-                                name, attributes, ..
-                            }) => {
-                                depth += 1;
-                                if depth == 2 {
-                                    if name.local_name == "card" {
-                                        line = format!(
-                                            "<{} {}/>",
-                                            name.local_name.clone(),
-                                            attributes
-                                                .iter()
-                                                .map(|attr| format!(
-                                                    "{}=\"{}\"",
-                                                    attr.name.local_name,
-                                                    attr.value.replace("&", "&amp;")
-                                                ))
-                                                .collect::<Vec<String>>()
-                                                .join(" ")
-                                        );
-                                        *map.entry(line.clone()).or_insert(0) += 1;
-                                    }
-                                }
+    let directory_name = &args[1];
+    let mut file_maps: Vec<HashMap<String, i32>> = Vec::new();
+    match read_dir(directory_name) {
+        Ok(entries) => {
+            for entry in entries {
+                let entry = entry.unwrap();
+                if let Some(extension) = entry.path().extension() {
+                    if extension == "txt" {
+                        let mut file = File::open(entry.path()).expect("Unable to open file");
+                        let mut contents = String::new();
+                        file.read_to_string(&mut contents)
+                            .expect("Unable to read file");
+                        let mut file_map: HashMap<String, i32> = HashMap::new();
+                        for line in contents.lines() {
+                            if !(line.trim_start().starts_with("<?xml")
+                                && line.trim_end().ends_with(">"))
+                                && !(line.starts_with("<deck>") || line.starts_with("</deck>"))
+                                && !line.trim_start().starts_with("<cardOutsideDeck")
+                            {
+                                file_map
+                                    .entry(line.to_string())
+                                    .and_modify(|e| *e += 1)
+                                    .or_insert(1);
                             }
-                            Ok(XmlEvent::EndElement { .. }) => {
-                                depth -= 1;
-                                if depth == 1 {
-                                    line.clear();
-                                }
-                            }
-                            Err(e) => {
-                                println!("Error: {}", e);
-                                break;
-                            }
-                            _ => {}
                         }
+                        file_maps.push(file_map);
                     }
-                    map_arr.push(map);
                 }
+            }
+        }
+        Err(err) => println!("Error reading directory: {}", err),
+    }
+
+    let mut final_map: HashMap<String, i32> = HashMap::new();
+    let file_maps_clone = file_maps.clone();
+
+    for file_map in file_maps {
+        for (key, value) in file_map {
+            let counter = final_map.entry(key).or_insert(0);
+            *counter = i32::max(*counter, value);
+        }
+    }
+
+    use std::fs::OpenOptions;
+    let mut file_number = 0;
+    let file;
+    loop {
+        let filename = if file_number == 0 {
+            "output.txt".to_string()
+        } else {
+            format!("output-{}.txt", file_number)
+        };
+
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&filename)
+        {
+            Ok(opened_file) => {
+                file = opened_file;
+                break;
+            }
+            Err(_) => {
+                file_number += 1;
             }
         }
     }
 
-    let mut final_map: HashMap<String, i32> = HashMap::new();
-    for map in map_arr {
-        for (key, value) in map {
-            final_map
-                .entry(key)
-                .and_modify(|v: &mut i32| *v = (*v).max(value))
-                .or_insert(value);
-        }
-    }
-
-    println!("{:?}", final_map);
-    use std::io::Write;
-
-    let master_file_path = "master.txt";
-    let mut master_file = File::create(master_file_path)?;
-    master_file.set_len(0)?;
-
+    let mut writer = std::io::BufWriter::new(&file);
     write!(
-        master_file,
+        writer,
         "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n<deck>\n"
-    )?;
-    for (key, value) in final_map.iter() {
+    )
+    .expect("Unable to write to output.txt");
+
+    for (key, value) in &final_map {
         for _ in 0..*value {
-            write!(master_file, "{}\n", key)?;
+            writeln!(writer, "{}", key).expect("Unable to write to output.txt");
         }
     }
-    write!(master_file, "</deck>\n")?;
+    writeln!(writer, "</deck>").expect("Unable to write to output.txt");
 
-    Ok(())
+    let number_of_files = file_maps_clone.len();
+    let number_of_keys = final_map.len();
+    let sum_values: i32 = final_map.values().sum();
+
+    println!("Number of decks processed: {}", number_of_files);
+    println!("Number of unique cards: {}", number_of_keys);
+    println!("Total number of cards: {}", sum_values);
 }

@@ -2,7 +2,7 @@
 CLI utility for finding the max of a particular SWCCG card across decks
 
 ## Build from Source
-`cargo build`
+`cargo build --target x86_64-pc-windows-gnu --release`
 
 ## Run
-`./target/debug/card-counter <deck file 1> <deck file 2> ...`
+`card-counter.exe <dir>`
