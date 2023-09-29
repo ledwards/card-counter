@@ -7,17 +7,19 @@ use std::io::prelude::*;
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() != 2 {
-        println!("card-counter requires exactly 1 argument - the directory that contains a number of gemp deck files");
+    if args.len() > 2 {
+        println!("card-counter may have only 1 argument (the directory that contains a number of gemp deck files) or 0 (use the current directory.)");
         return;
     }
 
-    if args[1] == "help" || args[1] == "-h" || args[1] == "--help" {
-        println!("card-counter takes a directory of gemp deck files (.txt) and counts the max number of any one card across all decks. It then outputs a new deck file with the max number of each card.");
+    if args.len() == 2 && (args[1] == "help" || args[1] == "-h" || args[1] == "--help") {
+        println!("card-counter counts the max number of any one card across all decks. It then outputs a new deck file with the max number of each card.");
+        println!("an optional argument specifies a directory to read deck files from. If no argument is specified, the current directory is used.");
         return;
     }
 
-    let directory_name = &args[1];
+    let directory_name = if args.len() == 1 { "." } else { &args[1] };
+
     let mut file_maps: Vec<HashMap<String, i32>> = Vec::new();
     match read_dir(directory_name) {
         Ok(entries) => {
