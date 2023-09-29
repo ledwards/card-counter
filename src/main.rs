@@ -33,13 +33,42 @@ fn main() {
                             .expect("Unable to read file");
                         let mut file_map: HashMap<String, i32> = HashMap::new();
                         for line in contents.lines() {
+                            let mut mutated_line = String::new();
                             if !(line.trim_start().starts_with("<?xml")
                                 && line.trim_end().ends_with(">"))
                                 && !(line.starts_with("<deck>") || line.starts_with("</deck>"))
                                 && !line.trim_start().starts_with("<cardOutsideDeck")
                             {
+                                if line.trim_end().ends_with("(AI)\"/>") {
+                                    let split_line: Vec<&str> =
+                                        line.splitn(3, |c| c == '_').collect();
+                                    let first_string =
+                                        split_line[0].trim_end_matches('_').to_string();
+                                    let second_string = split_line
+                                        .get(1)
+                                        .unwrap_or(&"")
+                                        .chars()
+                                        .take_while(|c| c.is_numeric())
+                                        .collect::<String>();
+                                    let third_string = split_line
+                                        .get(1)
+                                        .unwrap_or(&"")
+                                        .chars()
+                                        .skip_while(|c| c.is_numeric())
+                                        .collect::<String>()
+                                        + split_line.get(2).unwrap_or(&"");
+                                    mutated_line = format!(
+                                        "{}_{}{}",
+                                        first_string,
+                                        second_string.parse::<i32>().unwrap() - 1,
+                                        third_string.replace(" (AI)", "")
+                                    );
+                                    println!("Mutated Line: {}", mutated_line);
+                                } else {
+                                    mutated_line = line.to_string();
+                                }
                                 file_map
-                                    .entry(line.to_string())
+                                    .entry(mutated_line)
                                     .and_modify(|e| *e += 1)
                                     .or_insert(1);
                             }
