@@ -33,12 +33,12 @@ fn main() {
                             .expect("Unable to read file");
                         let mut file_map: HashMap<String, i32> = HashMap::new();
                         for line in contents.lines() {
-                            let mut mutated_line = String::new();
                             if !(line.trim_start().starts_with("<?xml")
                                 && line.trim_end().ends_with(">"))
                                 && !(line.starts_with("<deck>") || line.starts_with("</deck>"))
                                 && !line.trim_start().starts_with("<cardOutsideDeck")
                             {
+                                let mut mutated_line = line.to_string().replace("*", "");
                                 if line.trim_end().ends_with("(AI)\"/>") {
                                     let split_line: Vec<&str> =
                                         line.splitn(3, |c| c == '_').collect();
@@ -57,15 +57,13 @@ fn main() {
                                         .skip_while(|c| c.is_numeric())
                                         .collect::<String>()
                                         + split_line.get(2).unwrap_or(&"");
+
                                     mutated_line = format!(
                                         "{}_{}{}",
                                         first_string,
                                         second_string.parse::<i32>().unwrap() - 1,
                                         third_string.replace(" (AI)", "")
                                     );
-                                    println!("Mutated Line: {}", mutated_line);
-                                } else {
-                                    mutated_line = line.to_string();
                                 }
                                 file_map
                                     .entry(mutated_line)
